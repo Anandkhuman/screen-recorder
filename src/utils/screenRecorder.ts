@@ -12,6 +12,7 @@ export class ScreenRecorderEngine {
   private recordedChunks: Blob[] = [];
   private displayStream: MediaStream | null = null;
   private micStream: MediaStream | null = null;
+  private cameraStream: MediaStream | null = null;
   private audioMixer: AudioMixerEngine = new AudioMixerEngine();
   private timerInterval: number | null = null;
   private recordingSeconds: number = 0;
@@ -21,7 +22,7 @@ export class ScreenRecorderEngine {
   private isPaused: boolean = false;
   private callbacks: RecorderCallbacks;
 
-  // Offscreen canvas for compositing if needed (e.g. simulated screen or drawing compositing)
+  // Offscreen canvas for compositing if needed (e.g. simulated screen, camera + drawing)
   private compositeCanvas: HTMLCanvasElement | null = null;
   private compositeCtx: CanvasRenderingContext2D | null = null;
   private animationFrameId: number | null = null;
@@ -36,7 +37,7 @@ export class ScreenRecorderEngine {
 
   async startRecording(
     config: RecordingConfig,
-    sourceMode: 'display_media' | 'simulated_canvas',
+    sourceMode: 'display_media' | 'camera_media' | 'canvas_media',
     canvasElement?: HTMLCanvasElement | null,
     getStrokes?: () => DrawingStroke[]
   ): Promise<boolean> {
@@ -65,9 +66,10 @@ export class ScreenRecorderEngine {
         height = temp;
       }
 
-      let combinedStream: MediaStream;
+      let combinedStream: MediaStream | null = null;
 
-      if (sourceMode === 'display_media' && navigator.mediaDevices?.getDisplayMedia) {
+      // MODE A: Display Media (Screen Capture)
+      if (sourceMode === 'display_media' && typeof navigator !== 'undefined' && navigator.mediaDevices?.getDisplayMedia) {
         try {
           this.displayStream = await navigator.mediaDevices.getDisplayMedia({
             video: {
@@ -77,48 +79,77 @@ export class ScreenRecorderEngine {
             },
             audio: config.audioSource === 'internal' || config.audioSource === 'mic_internal',
           });
+
+          const videoTrack = this.displayStream.getVideoTracks()[0];
+          if (videoTrack) {
+            videoTrack.onended = () => {
+              if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                this.stopRecording(config);
+              }
+            };
+          }
+
+          if (canvasElement && getStrokes) {
+            combinedStream = this.setupCompositeCanvas(this.displayStream, canvasElement, getStrokes, width, height, config.fps);
+          } else {
+            combinedStream = new MediaStream([this.displayStream.getVideoTracks()[0]]);
+          }
         } catch (err) {
-          console.warn('getDisplayMedia was canceled or failed, falling back to simulated high-res canvas stream:', err);
-          return this.startRecording(config, 'simulated_canvas', canvasElement, getStrokes);
+          console.warn('getDisplayMedia was canceled or not supported on this mobile device. Trying canvas fallback:', err);
+          return this.startRecording(config, 'canvas_media', canvasElement, getStrokes);
         }
+      } 
+      // MODE B: Camera / Live Video Mode
+      else if (sourceMode === 'camera_media') {
+        try {
+          this.cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: width },
+              height: { ideal: height },
+              facingMode: 'user',
+            },
+            audio: config.audioSource === 'mic' || config.audioSource === 'mic_internal',
+          });
 
-        // Handle user clicking native "Stop sharing" bar
-        const videoTrack = this.displayStream.getVideoTracks()[0];
-        if (videoTrack) {
-          videoTrack.onended = () => {
-            if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-              this.stopRecording(config);
-            }
-          };
+          if (canvasElement && getStrokes) {
+            combinedStream = this.setupCompositeCanvas(this.cameraStream, canvasElement, getStrokes, width, height, config.fps);
+          } else {
+            combinedStream = new MediaStream([this.cameraStream.getVideoTracks()[0]]);
+          }
+        } catch (camErr) {
+          console.warn('Camera stream failed, falling back to canvas media:', camErr);
+          return this.startRecording(config, 'canvas_media', canvasElement, getStrokes);
         }
-
-        // Create composite stream if drawing overlay is captured
-        if (canvasElement && getStrokes) {
-          combinedStream = this.setupCompositeCanvas(this.displayStream, canvasElement, getStrokes, width, height, config.fps);
-        } else {
-          combinedStream = new MediaStream([this.displayStream.getVideoTracks()[0]]);
-        }
-      } else {
-        // Simulated / Interactive Android Canvas recording
+      }
+      
+      // MODE C: Live High-Performance Interactive Canvas Screen
+      if (!combinedStream) {
         if (!canvasElement) {
           canvasElement = document.createElement('canvas');
           canvasElement.width = width;
           canvasElement.height = height;
+          const ctx = canvasElement.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#0c0a09';
+            ctx.fillRect(0, 0, width, height);
+          }
         }
-        const canvasStream = canvasElement.captureStream(config.fps);
+        const canvasStream = canvasElement.captureStream ? canvasElement.captureStream(config.fps) : (canvasElement as any).mozCaptureStream(config.fps);
         combinedStream = new MediaStream([canvasStream.getVideoTracks()[0]]);
       }
 
       // 2. Setup Audio
       if (config.audioSource === 'mic' || config.audioSource === 'mic_internal') {
         try {
-          this.micStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            },
-          });
+          if (!this.micStream) {
+            this.micStream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+              },
+            });
+          }
           await this.audioMixer.setupMicrophone(this.micStream, config.micVolume);
         } catch (micErr) {
           console.warn('Microphone permission not granted or unavailable:', micErr);
@@ -141,6 +172,8 @@ export class ScreenRecorderEngine {
         combinedStream.addTrack(mixedAudioStream.getAudioTracks()[0]);
       } else if (this.displayStream && this.displayStream.getAudioTracks().length > 0) {
         combinedStream.addTrack(this.displayStream.getAudioTracks()[0]);
+      } else if (this.cameraStream && this.cameraStream.getAudioTracks().length > 0) {
+        combinedStream.addTrack(this.cameraStream.getAudioTracks()[0]);
       }
 
       // 4. Bitrate calculation
@@ -155,17 +188,18 @@ export class ScreenRecorderEngine {
         videoBitsPerSecond = config.videoQuality === '2K' ? 16000000 : config.videoQuality === '1080p' ? 8000000 : 4000000;
       }
 
-      // 5. Select mime type
+      // 5. Select compatible mime type
       const mimeTypes = [
-        'video/webm;codecs=vp9,opus',
         'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9,opus',
         'video/webm;codecs=h264,opus',
         'video/webm',
+        'video/mp4;codecs=avc1',
         'video/mp4',
       ];
       let selectedMimeType = '';
       for (const mime of mimeTypes) {
-        if (MediaRecorder.isTypeSupported(mime)) {
+        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(mime)) {
           selectedMimeType = mime;
           break;
         }

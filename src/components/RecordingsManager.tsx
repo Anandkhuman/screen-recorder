@@ -326,33 +326,63 @@ export const RecordingsManager: React.FC<RecordingsManagerProps> = ({
             </div>
 
             {/* Video Canvas / Element */}
-            <div className="relative aspect-video bg-black flex items-center justify-center">
+            <div
+              className="relative aspect-video bg-black flex items-center justify-center cursor-pointer group"
+              onClick={() => {
+                if (videoPlayerRef.current) {
+                  if (isPlaying) {
+                    videoPlayerRef.current.pause();
+                    setIsPlaying(false);
+                  } else {
+                    videoPlayerRef.current.play().catch(() => {});
+                    setIsPlaying(true);
+                  }
+                }
+              }}
+            >
               {selectedVideo.blobUrl ? (
                 <video
                   ref={videoPlayerRef}
                   src={selectedVideo.blobUrl}
-                  controls={false}
+                  playsInline
                   autoPlay
+                  preload="auto"
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
                   onTimeUpdate={() => {
                     if (videoPlayerRef.current) {
                       setCurrentTime(videoPlayerRef.current.currentTime);
                       setDuration(videoPlayerRef.current.duration || selectedVideo.durationSeconds);
                     }
                   }}
+                  onLoadedMetadata={() => {
+                    if (videoPlayerRef.current) {
+                      setDuration(videoPlayerRef.current.duration || selectedVideo.durationSeconds);
+                      videoPlayerRef.current.play().catch(() => {});
+                    }
+                  }}
                   onEnded={() => setIsPlaying(false)}
                   className="w-full h-full object-contain"
                 />
               ) : (
-                <img
-                  src={selectedVideo.thumbnailUrl}
-                  alt={selectedVideo.title}
-                  className="w-full h-full object-contain opacity-80"
-                />
+                <div className="flex flex-col items-center justify-center p-6 text-center">
+                  <Film className="w-12 h-12 text-stone-600 mb-2" />
+                  <p className="text-xs text-stone-400">Preview generated for {selectedVideo.title}</p>
+                </div>
+              )}
+
+              {/* Big Center Play/Pause button on Hover or Paused */}
+              {!isPlaying && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+                  <div className="p-4 rounded-full bg-rose-600/90 text-white shadow-2xl backdrop-blur-xs scale-110">
+                    <Play className="w-8 h-8 fill-white translate-x-0.5" />
+                  </div>
+                </div>
               )}
             </div>
 
             {/* Video Controls Bar */}
-            <div className="p-4 bg-stone-900/90 border-t border-stone-800 space-y-3">
+            <div className="p-4 bg-stone-900/95 border-t border-stone-800 space-y-3">
               {/* Scrub Bar */}
               <div className="flex items-center space-x-2 text-xs text-stone-400">
                 <span className="font-mono">{formatTime(currentTime)}</span>
@@ -360,7 +390,7 @@ export const RecordingsManager: React.FC<RecordingsManagerProps> = ({
                   type="range"
                   min="0"
                   max={duration || selectedVideo.durationSeconds || 10}
-                  step="0.1"
+                  step="0.05"
                   value={currentTime}
                   onChange={(e) => {
                     const time = parseFloat(e.target.value);
@@ -369,7 +399,7 @@ export const RecordingsManager: React.FC<RecordingsManagerProps> = ({
                       videoPlayerRef.current.currentTime = time;
                     }
                   }}
-                  className="w-full h-1.5 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                  className="w-full h-2 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-rose-500"
                 />
                 <span className="font-mono">
                   {formatTime(duration || selectedVideo.durationSeconds)}
@@ -380,18 +410,19 @@ export const RecordingsManager: React.FC<RecordingsManagerProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       if (videoPlayerRef.current) {
                         if (isPlaying) {
                           videoPlayerRef.current.pause();
                           setIsPlaying(false);
                         } else {
-                          videoPlayerRef.current.play();
+                          videoPlayerRef.current.play().catch(() => {});
                           setIsPlaying(true);
                         }
                       }
                     }}
-                    className="p-2.5 rounded-full bg-rose-600 text-white hover:bg-rose-500 transition-colors"
+                    className="p-2.5 rounded-full bg-rose-600 text-white hover:bg-rose-500 transition-colors shadow-sm"
                   >
                     {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-white" />}
                   </button>
@@ -401,13 +432,14 @@ export const RecordingsManager: React.FC<RecordingsManagerProps> = ({
                     {[0.5, 1, 1.5, 2].map((spd) => (
                       <button
                         key={spd}
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setPlaybackSpeed(spd);
                           if (videoPlayerRef.current) {
                             videoPlayerRef.current.playbackRate = spd;
                           }
                         }}
-                        className={`px-2 py-1 rounded-lg font-mono ${
+                        className={`px-2 py-1 rounded-lg font-mono transition-colors ${
                           playbackSpeed === spd
                             ? 'bg-rose-600 text-white font-bold'
                             : 'text-stone-400 hover:text-white bg-stone-800'
@@ -421,7 +453,25 @@ export const RecordingsManager: React.FC<RecordingsManagerProps> = ({
 
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => handleDownload(selectedVideo)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (videoPlayerRef.current) {
+                        if (videoPlayerRef.current.requestFullscreen) {
+                          videoPlayerRef.current.requestFullscreen();
+                        }
+                      }
+                    }}
+                    className="p-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 transition-colors"
+                    title="Fullscreen"
+                  >
+                    <Maximize className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownload(selectedVideo);
+                    }}
                     className="flex items-center space-x-1.5 px-4 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-sm"
                   >
                     <Download className="w-3.5 h-3.5" />

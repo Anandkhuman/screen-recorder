@@ -36,12 +36,11 @@ interface HomeScreenProps {
   setConfig: React.Dispatch<React.SetStateAction<RecordingConfig>>;
   recordingStatus: RecordingStatus;
   recordingSeconds: number;
-  onStartRecording: (sourceMode: 'display_media' | 'simulated_canvas') => void;
+  onStartRecording: (sourceMode: 'display_media' | 'camera_media' | 'canvas_media') => void;
   onStopRecording: () => void;
   onOpenMusicModal: () => void;
-  onOpenSimulator: () => void;
-  activeSourceMode: 'display_media' | 'simulated_canvas';
-  setActiveSourceMode: (mode: 'display_media' | 'simulated_canvas') => void;
+  activeSourceMode: 'display_media' | 'camera_media' | 'canvas_media';
+  setActiveSourceMode: (mode: 'display_media' | 'camera_media' | 'canvas_media') => void;
 }
 
 const QUALITY_OPTIONS: { id: VideoQuality; label: string; desc: string }[] = [
@@ -79,7 +78,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onStartRecording,
   onStopRecording,
   onOpenMusicModal,
-  onOpenSimulator,
   activeSourceMode,
   setActiveSourceMode,
 }) => {
@@ -121,30 +119,42 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           isRecording ? 'bg-rose-500 scale-125' : 'bg-red-500'
         }`} />
 
-        {/* Source Mode Toggle (Real Display vs Android Device Sandbox) */}
-        <div className="flex items-center space-x-1 p-1 bg-stone-200/80 dark:bg-stone-800 rounded-full mb-8 border border-stone-300 dark:border-stone-700/60 shadow-inner">
+        {/* Source Mode Toggle */}
+        <div className="flex flex-wrap items-center justify-center gap-1 p-1 bg-stone-200/80 dark:bg-stone-800 rounded-full mb-8 border border-stone-300 dark:border-stone-700/60 shadow-inner">
           <button
             onClick={() => setActiveSourceMode('display_media')}
-            className={`flex items-center space-x-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
               activeSourceMode === 'display_media'
                 ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-white shadow-sm'
                 : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
             }`}
           >
             <Monitor className="w-3.5 h-3.5 text-blue-500" />
-            <span>Screen / Window / Tab Capture</span>
+            <span>Screen Capture</span>
           </button>
 
           <button
-            onClick={() => setActiveSourceMode('simulated_canvas')}
-            className={`flex items-center space-x-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              activeSourceMode === 'simulated_canvas'
+            onClick={() => setActiveSourceMode('camera_media')}
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              activeSourceMode === 'camera_media'
                 ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-white shadow-sm'
                 : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
             }`}
           >
-            <Smartphone className="w-3.5 h-3.5 text-rose-500" />
-            <span>Android OS Interactive Sandbox</span>
+            <Smartphone className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Camera / Mobile Feed</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSourceMode('canvas_media')}
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              activeSourceMode === 'canvas_media'
+                ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-white shadow-sm'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-rose-500" />
+            <span>Live Interactive Board</span>
           </button>
         </div>
 

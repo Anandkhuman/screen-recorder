@@ -6,7 +6,6 @@ import { DrawingCanvas } from './components/DrawingCanvas';
 import { CountdownModal } from './components/CountdownModal';
 import { RecordingsManager } from './components/RecordingsManager';
 import { ConfigSettings } from './components/ConfigSettings';
-import { AndroidSimulator } from './components/AndroidSimulator';
 import { BackgroundMusicModal } from './components/BackgroundMusicModal';
 import { PermissionsModal } from './components/PermissionsModal';
 import { AndroidCodeViewer } from './components/AndroidCodeViewer';
@@ -20,7 +19,7 @@ import {
   AndroidPermissionState,
 } from './types';
 import { ScreenRecorderEngine } from './utils/screenRecorder';
-import { SAMPLE_RECORDINGS } from './data/sampleRecordings';
+import { initializeSampleRecordings } from './utils/sampleVideoGenerator';
 import { soundEffects } from './utils/soundEffects';
 import confetti from 'canvas-confetti';
 
@@ -29,7 +28,7 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
   // Tab navigation
-  const [currentTab, setCurrentTab] = useState<'home' | 'recordings' | 'simulator' | 'settings' | 'code'>('home');
+  const [currentTab, setCurrentTab] = useState<'home' | 'recordings' | 'settings' | 'code'>('home');
 
   // Recording configuration
   const [config, setConfig] = useState<RecordingConfig>({
@@ -58,7 +57,7 @@ export default function App() {
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const [dataSizeBytes, setDataSizeBytes] = useState<number>(0);
   const [isMicMuted, setIsMicMuted] = useState<boolean>(false);
-  const [activeSourceMode, setActiveSourceMode] = useState<'display_media' | 'simulated_canvas'>('display_media');
+  const [activeSourceMode, setActiveSourceMode] = useState<'display_media' | 'camera_media' | 'canvas_media'>('display_media');
 
   // Floating Popup position
   const [floatingPosition, setFloatingPosition] = useState<FloatingPosition>({
@@ -74,8 +73,8 @@ export default function App() {
   const [isHighlighter, setIsHighlighter] = useState<boolean>(false);
   const [strokes, setStrokes] = useState<DrawingStroke[]>([]);
 
-  // Recordings library
-  const [recordings, setRecordings] = useState<RecordedVideo[]>(SAMPLE_RECORDINGS);
+  // Recordings library (loads playable video samples)
+  const [recordings, setRecordings] = useState<RecordedVideo[]>([]);
 
   // Modals
   const [musicModalOpen, setMusicModalOpen] = useState<boolean>(false);
@@ -92,9 +91,16 @@ export default function App() {
   });
 
   // Canvas Refs
-  const simulatorCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const recorderEngineRef = useRef<ScreenRecorderEngine | null>(null);
+
+  // Load playable samples on initial mount
+  useEffect(() => {
+    initializeSampleRecordings().then((sampleVideos) => {
+      setRecordings(sampleVideos);
+    });
+  }, []);
 
   // Toggle Dark Mode on HTML body
   useEffect(() => {
@@ -122,7 +128,7 @@ export default function App() {
   const getStrokesCallback = useCallback(() => strokes, [strokes]);
 
   // Start Recording Trigger
-  const handleInitiateRecording = (sourceMode: 'display_media' | 'simulated_canvas') => {
+  const handleInitiateRecording = (sourceMode: 'display_media' | 'camera_media' | 'canvas_media') => {
     setActiveSourceMode(sourceMode);
     if (config.countdown > 0) {
       setShowCountdownModal(true);
@@ -131,11 +137,11 @@ export default function App() {
     }
   };
 
-  const executeStartRecording = async (sourceMode: 'display_media' | 'simulated_canvas') => {
+  const executeStartRecording = async (sourceMode: 'display_media' | 'camera_media' | 'canvas_media') => {
     setShowCountdownModal(false);
     if (!recorderEngineRef.current) return;
 
-    const targetCanvas = sourceMode === 'simulated_canvas' ? simulatorCanvasRef.current : null;
+    const targetCanvas = sourceMode === 'canvas_media' ? (drawingCanvasRef.current || liveCanvasRef.current) : null;
 
     const success = await recorderEngineRef.current.startRecording(
       config,
@@ -146,10 +152,6 @@ export default function App() {
 
     if (success) {
       setRecordingStatus('recording');
-      // If simulated canvas mode was chosen, automatically switch view to simulator sandbox
-      if (sourceMode === 'simulated_canvas' && currentTab !== 'simulator') {
-        setCurrentTab('simulator');
-      }
     }
   };
 
@@ -245,6 +247,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-sans transition-colors duration-200 flex flex-col relative overflow-x-hidden">
+      {/* Hidden fallback canvas */}
+      <canvas ref={liveCanvasRef} className="hidden" width={1920} height={1080} />
+
       {/* Top App Header */}
       <Header
         currentTab={currentTab}
@@ -269,18 +274,8 @@ export default function App() {
             onStartRecording={handleInitiateRecording}
             onStopRecording={handleStopRecording}
             onOpenMusicModal={() => setMusicModalOpen(true)}
-            onOpenSimulator={() => setCurrentTab('simulator')}
             activeSourceMode={activeSourceMode}
             setActiveSourceMode={setActiveSourceMode}
-          />
-        )}
-
-        {currentTab === 'simulator' && (
-          <AndroidSimulator
-            canvasRef={simulatorCanvasRef}
-            drawingCanvasRef={drawingCanvasRef}
-            isRecording={recordingStatus === 'recording'}
-            showTouchIndicator={config.showTouchIndicator}
           />
         )}
 

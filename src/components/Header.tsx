@@ -14,8 +14,8 @@ import {
 import { RecordingStatus, AndroidPermissionState } from '../types';
 
 interface HeaderProps {
-  currentTab: 'home' | 'recordings' | 'simulator' | 'settings' | 'code';
-  setCurrentTab: (tab: 'home' | 'recordings' | 'simulator' | 'settings' | 'code') => void;
+  currentTab: 'home' | 'recordings' | 'settings' | 'code';
+  setCurrentTab: (tab: 'home' | 'recordings' | 'settings' | 'code') => void;
   recordingStatus: RecordingStatus;
   recordingSeconds: number;
   isDarkMode: boolean;
@@ -83,18 +83,6 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Video className="w-3.5 h-3.5" />
               <span>Recorder</span>
-            </button>
-
-            <button
-              onClick={() => setCurrentTab('simulator')}
-              className={`flex items-center space-x-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                currentTab === 'simulator'
-                  ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-white shadow-sm'
-                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
-              }`}
-            >
-              <Smartphone className="w-3.5 h-3.5 text-blue-500" />
-              <span>Android Sandbox</span>
             </button>
 
             <button
@@ -185,12 +173,6 @@ export const Header: React.FC<HeaderProps> = ({
             className={`px-3 py-1 rounded-full whitespace-nowrap ${currentTab === 'home' ? 'bg-rose-500 text-white font-bold' : 'text-stone-600 dark:text-stone-400'}`}
           >
             Recorder
-          </button>
-          <button
-            onClick={() => setCurrentTab('simulator')}
-            className={`px-3 py-1 rounded-full whitespace-nowrap ${currentTab === 'simulator' ? 'bg-rose-500 text-white font-bold' : 'text-stone-600 dark:text-stone-400'}`}
-          >
-            Android Sandbox
           </button>
           <button
             onClick={() => setCurrentTab('recordings')}
