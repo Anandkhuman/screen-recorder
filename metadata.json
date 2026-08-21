@@ -1,0 +1,6 @@
+{
+  "name": "Screen Recorder Pro",
+  "description": "Android-style Screen Recorder with floating popup controls, real screen & audio capture, live drawing overlay excluded from video, and Material 3 UI.",
+  "requestFramePermissions": ["microphone", "camera", "display-capture"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
